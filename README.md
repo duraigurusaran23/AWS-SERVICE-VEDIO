@@ -14,5 +14,3 @@ Welcome to the **AWS Services Tutorial Repository**! 📚 This repo contains all
 
 📺 Check out the full playlist on YouTube: **[https://www.youtube.com/channel/UCvZVZ25y62BopBPPVYiOLnA]**  
 
-## 📂 Repository Structure  
-
