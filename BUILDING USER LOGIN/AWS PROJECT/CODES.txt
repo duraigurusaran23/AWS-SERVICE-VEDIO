@@ -1,0 +1,142 @@
+BUCKET POLICY:
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::my-signin-login-webpage/*"
+        }
+    ]
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+SIGNUP FUNCTION CODE:
+
+import json
+import boto3
+import hashlib
+from botocore.exceptions import BotoCoreError, ClientError
+
+# Initialize DynamoDB
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('Users')
+
+def lambda_handler(event, context):
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "OPTIONS, POST, GET",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
+
+    # Handle CORS preflight (OPTIONS request)
+    if event.get("httpMethod") == "OPTIONS":
+        return {"statusCode": 200, "headers": headers, "body": json.dumps({"message": "CORS preflight successful"})}
+
+    # Ensure request body exists
+    if not event.get("body"):
+        return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "Missing request body"})}
+
+    try:
+        # Parse request body
+        body = json.loads(event["body"])
+        email = body.get("email")
+        password = body.get("password")
+
+        # Validate input
+        if not email or not password:
+            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "Email and password are required"})}
+
+        # Hash the password before storing
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        # Check if user already exists
+        existing_user = table.get_item(Key={'email': email})
+        if 'Item' in existing_user:
+            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "User already exists"})}
+
+        # Store user in DynamoDB
+        table.put_item(Item={'email': email, 'password': hashed_password})
+
+        return {"statusCode": 200, "headers": headers, "body": json.dumps({"message": "Signup successful"})}
+
+    except (BotoCoreError, ClientError) as e:
+        return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": f"DynamoDB Error: {str(e)}"})}
+    except Exception as e:
+        return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
+
+
+SIGNUP TEST EVENT CODE:
+
+{
+  "body": "{\"email\": \"dgs@example.com\", \"password\": \"TestPass123\"}"
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+LOGIN FUNCTION CODE:
+
+import json
+import boto3
+import hashlib
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('Users')
+
+def lambda_handler(event, context):
+    headers = {
+        "Access-Control-Allow-Origin": "*",  # Allow all domains (change if needed)
+        "Access-Control-Allow-Methods": "OPTIONS, POST, GET",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
+
+    if event.get("httpMethod") == "OPTIONS":  # Handle preflight requests
+        return {"statusCode": 200, "headers": headers, "body": json.dumps("CORS preflight successful")}
+
+    try:
+        body = json.loads(event["body"])
+        email = body.get("email")
+        password = body.get("password")
+
+        if not email or not password:
+            return {"statusCode": 400, "headers": headers, "body": json.dumps({"error": "Email and password are required"})}
+
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        response = table.get_item(Key={'email': email})
+
+        if 'Item' not in response or response['Item'].get('password') != hashed_password:
+            return {"statusCode": 401, "headers": headers, "body": json.dumps({"error": "Invalid credentials"})}
+
+        return {"statusCode": 200, "headers": headers, "body": json.dumps({"message": "Login successful"})}
+
+    except Exception as e:
+        return {"statusCode": 500, "headers": headers, "body": json.dumps({"error": str(e)})}
+
+
+LOGIN TEST EVENT:
+
+{
+  "body": "{\"email\": \"test@example.com\", \"password\": \"TestPass123\"}"
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+POLICY CODE:(JSON)
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
